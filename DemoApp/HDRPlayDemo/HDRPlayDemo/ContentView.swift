@@ -109,15 +109,39 @@ struct ContentView: View {
                             viewModel.testDecoding()
                         }
                         .buttonStyle(.bordered)
-                        
+
                         if let frame = viewModel.currentFrame {
                             Text("✅ Decoded frame! \(viewModel.frameCount) frames")
                                 .foregroundColor(.green)
-                            
+
                             PixelBufferView(pixelBuffer: frame)
                                 .frame(width: 300, height: 169)
                                 .cornerRadius(8)
                         }
+                    }
+
+                    // Video Player - Phase 2.1
+                    if let fileURL = viewModel.fileURL {
+                        Divider()
+                            .padding(.vertical)
+
+                        Text("Phase 2.1: Video Player")
+                            .font(.headline)
+
+                        NavigationLink(destination: VideoPlayerView(url: fileURL)) {
+                            HStack {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.title2)
+                                Text("Play Video")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
                     }
                 }
                 .padding()
@@ -163,9 +187,9 @@ class VideoTestViewModel: ObservableObject {
     @Published var packetInfo: [String] = []
     @Published var currentFrame: CVPixelBuffer?
     @Published var frameCount: Int = 0
-    
+
     private var demuxer: MKVDemuxer?
-    private var fileURL: URL?
+    var fileURL: URL?
     
     func testDecoding() {
         Task {
