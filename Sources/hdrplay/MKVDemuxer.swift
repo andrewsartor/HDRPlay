@@ -55,8 +55,27 @@ public class MKVDemuxer {
     public var videoInfo: VideoInfo? {
         guard let stream = videoStream else { return nil }
         let codecPar = stream.pointee.codecpar.pointee
-        
-        return VideoInfo(width: Int(codecPar.width), height: Int(codecPar.height), codecID: codecPar.codec_id, colorTransfer: codecPar.color_trc, colorPrimaries: codecPar.color_primaries)
+
+        // Extract extradata if available
+        var extradata: Data?
+        if codecPar.extradata_size > 0, let extradataPtr = codecPar.extradata {
+            extradata = Data(bytes: extradataPtr, count: Int(codecPar.extradata_size))
+        }
+
+        return VideoInfo(
+            width: Int(codecPar.width),
+            height: Int(codecPar.height),
+            codecID: codecPar.codec_id,
+            colorTransfer: codecPar.color_trc,
+            colorPrimaries: codecPar.color_primaries,
+            extradata: extradata,
+            pixelFormat: AVPixelFormat(codecPar.format)
+        )
+    }
+
+    public var timebase: AVRational? {
+        guard let stream = videoStream else { return nil }
+        return stream.pointee.time_base
     }
     
     public func readPacket() throws -> VideoPacket? {
@@ -123,11 +142,13 @@ public struct VideoInfo {
     public let codecID: AVCodecID
     public let colorTransfer: AVColorTransferCharacteristic
     public let colorPrimaries: AVColorPrimaries
-    
+    public let extradata: Data?
+    public let pixelFormat: AVPixelFormat
+
     public var isHDR10: Bool {
         colorTransfer == AVCOL_TRC_SMPTE2084 && colorPrimaries == AVCOL_PRI_BT2020
     }
-    
+
     public var isHLG: Bool {
         colorTransfer == AVCOL_TRC_ARIB_STD_B67
     }

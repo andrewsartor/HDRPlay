@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@testable import hdrplay
+@testable import HDRPlay
 
 final class MKVDemuxerTests: XCTestCase {
     

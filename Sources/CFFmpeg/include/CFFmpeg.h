@@ -23,6 +23,7 @@
 // Helper function declarations
 int get_averror_eof(void);
 int averror_from_errno(int err);
+int get_averror_eagain(void);
 extern const int64_t AV_NOPTS_VALUE_INT;
 
 #endif // !CFFmpeg_h

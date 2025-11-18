@@ -15,4 +15,8 @@ int averror_from_errno(int err) {
     return AVERROR(err);
 }
 
+int get_averror_eagain(void) {
+    return AVERROR(EAGAIN);
+}
+
 const int64_t AV_NOPTS_VALUE_INT = AV_NOPTS_VALUE;

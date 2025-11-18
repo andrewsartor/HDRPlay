@@ -34,8 +34,7 @@ let package = Package(
                 ),
         .target(
             name: "HDRPlay",
-            dependencies: ["CFFmpeg"],
-            path: "Sources/hdrplay"
+            dependencies: ["CFFmpeg"]
         ),
         .testTarget(
             name: "hdrplayTests",

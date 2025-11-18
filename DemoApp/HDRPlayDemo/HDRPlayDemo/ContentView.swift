@@ -103,6 +103,22 @@ struct ContentView: View {
                             .padding()
                         }
                     }
+                    
+                    if viewModel.fileInfo != nil {
+                        Button("Decode First Frame") {
+                            viewModel.testDecoding()
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        if let frame = viewModel.currentFrame {
+                            Text("✅ Decoded frame! \(viewModel.frameCount) frames")
+                                .foregroundColor(.green)
+                            
+                            PixelBufferView(pixelBuffer: frame)
+                                .frame(width: 300, height: 169)
+                                .cornerRadius(8)
+                        }
+                    }
                 }
                 .padding()
             }
@@ -145,9 +161,40 @@ class VideoTestViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var isLoading = false
     @Published var packetInfo: [String] = []
+    @Published var currentFrame: CVPixelBuffer?
+    @Published var frameCount: Int = 0
     
     private var demuxer: MKVDemuxer?
     private var fileURL: URL?
+    
+    func testDecoding() {
+        Task {
+            do {
+                guard let demuxer = demuxer,
+                      let videoInfo = demuxer.videoInfo else {
+                    errorMessage = "No video info available"
+                    return
+                }
+                
+                let decoder = try VideoDecoder(
+                    videoInfo: videoInfo,
+                    timebase: demuxer.timebase ?? AVRational(num: 1, den: 1000000)
+                )
+                
+                while let packet = try demuxer.readPacket() {
+                    let frames = try decoder.decode(packet: packet)
+                    
+                    if let firstFrame = frames.first {
+                        currentFrame = firstFrame.pixelBuffer
+                        frameCount += frames.count
+                        break
+                    }
+                }
+            } catch {
+                errorMessage = "Decoding error: \(error.localizedDescription)"
+            }
+        }
+    }
     
     func handleFileSelection(_ result: Result<[URL], Error>) {
         switch result {
@@ -226,7 +273,7 @@ class VideoTestViewModel: ObservableObject {
                 guard let demuxer = demuxer else { return }
                 
                 // Read first 10 packets
-                for i in 0..<10 {
+                for _ in 0..<10 {
                     if let packet = try demuxer.readPacket() {
                         let info = "\(packet.data.count) bytes, " +
                                    "keyframe: \(packet.isKeyframe ? "✓" : "✗"), " +
