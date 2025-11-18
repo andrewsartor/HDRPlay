@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "2BF8D4E3-06AC-4801-9C9E-5076097C3C29",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "hdrplayTests",
+        "name" : "hdrplayTests"
+      }
+    }
+  ],
+  "version" : 1
+}
