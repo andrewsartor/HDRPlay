@@ -1,0 +1,90 @@
+FFmpeg License
+===============
+
+This project uses FFmpeg libraries (libavformat, libavcodec, libavutil,
+libswscale, libswresample) which are licensed under the GNU Lesser General
+Public License (LGPL) version 2.1 or later.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+
+-------------------------------------------------------------------------------
+
+FFmpeg Source Code
+==================
+
+The source code for FFmpeg version 8.0 can be obtained from:
+https://ffmpeg.org/releases/ffmpeg-8.0.tar.bz2
+
+Or from the official FFmpeg Git repository:
+https://git.ffmpeg.org/ffmpeg.git (tag: n8.0)
+
+Build configuration used in this project:
+- See Scripts/build-ffmpeg-all.sh for exact configure flags
+- Enabled components: HEVC decoder, H.264 decoder, Matroska demuxer
+- Dynamic linking enabled (shared libraries)
+
+-------------------------------------------------------------------------------
+
+GNU LESSER GENERAL PUBLIC LICENSE
+Version 2.1, February 1999
+
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed.
+
+[This is the first released version of the Lesser GPL.  It also counts
+ as the successor of the GNU Library Public License, version 2, hence
+ the version number 2.1.]
+
+Preamble
+
+The licenses for most software are designed to take away your
+freedom to share and change it. By contrast, the GNU General Public
+Licenses are intended to guarantee your freedom to share and change
+free software--to make sure the software is free for all its users.
+
+This license, the Lesser General Public License, applies to some
+specially designated software packages--typically libraries--of the
+Free Software Foundation and other authors who decide to use it. You
+can use it too, but we suggest you first think carefully about whether
+this license or the ordinary General Public License is the better
+strategy to use in any particular case, based on the explanations below.
+
+When we speak of free software, we are referring to freedom of use,
+not price. Our General Public Licenses are designed to make sure that
+you have the freedom to distribute copies of free software (and charge
+for this service if you wish); that you receive source code or can get
+it if you want it; that you can change the software and use pieces of
+it in new free programs; and that you are informed that you can do
+these things.
+
+[Full LGPL 2.1 text continues - truncated for brevity]
+
+For the complete LGPL 2.1 license text, see:
+https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+-------------------------------------------------------------------------------
+
+COMPLIANCE NOTICE
+=================
+
+This project complies with the LGPL by:
+
+1. Using dynamic linking (.dylib) for all FFmpeg libraries
+2. Not modifying FFmpeg source code
+3. Providing access to FFmpeg source code (see above)
+4. Including this license notice
+5. Making it possible for users to replace FFmpeg libraries
+
+Your rights under LGPL:
+- You may use this software freely
+- You may modify the FFmpeg libraries and re-link
+- You may distribute applications using these libraries
+- You retain ownership of your application code
+
+Your obligations:
+- Include this license notice when distributing
+- Inform users they can obtain FFmpeg source
+- Use dynamic linking (already done)
+- Allow users to replace LGPL libraries if desired

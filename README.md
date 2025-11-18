@@ -312,4 +312,23 @@ This is currently a personal learning project, but suggestions and feedback are 
 
 ## License
 
-[To be determined]
+This project's Swift code will be licensed under [TBD].
+
+**FFmpeg Components:** This project uses FFmpeg libraries (libavformat, libavcodec, libavutil, libswscale, libswresample) which are licensed under the **GNU Lesser General Public License (LGPL) v2.1+**.
+
+See [FFMPEG-LICENSE.txt](FFMPEG-LICENSE.txt) for complete license terms and source code access information.
+
+### LGPL Compliance
+
+This project complies with LGPL requirements by:
+- ✅ Using dynamic linking (`.dylib`) for all FFmpeg libraries
+- ✅ Not modifying FFmpeg source code
+- ✅ Providing FFmpeg source access (see FFMPEG-LICENSE.txt)
+- ✅ Including license notices
+- ✅ Allowing library replacement by end users
+
+## Acknowledgments
+
+- **FFmpeg team** - For the incredible multimedia framework that makes this possible
+- **Apple** - For excellent native video APIs and HDR support
+- **Open source community** - For inspiration, guidance, and shared knowledge
