@@ -145,9 +145,14 @@ create_library_xcframework() {
     for config in "${platform_configs[@]}"; do
         local platform_name="${config%%:*}"
         local platform_path="${config##*:}"
-        
+
         local lib_file="${platform_path}/lib/${lib_name}.${lib_type}"
-        
+
+        # Resolve symlinks to actual binary file
+        if [[ -L "${lib_file}" ]]; then
+            lib_file=$(readlink -f "${lib_file}" 2>/dev/null || realpath "${lib_file}" 2>/dev/null || echo "${lib_file}")
+        fi
+
         if [[ -f "${lib_file}" ]]; then
             # Extract library-specific headers
             local headers_path=$(extract_library_headers "${platform_path}" "${lib_name}")
