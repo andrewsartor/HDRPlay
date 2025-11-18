@@ -6,4 +6,33 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
-Frameworks/*
+
+# Build artifacts
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Xcode
+*.xcuserstate
+*.xcworkspace
+xcuserdata/
+*.moved-aside
+
+# FFmpeg source and intermediate builds (optional - these are large)
+ffmpeg-*/
+Frameworks/ios-arm64/
+Frameworks/ios-simulator-*/
+Frameworks/tvos-*/
+Frameworks/macos-*/
+Frameworks/temp/
+
+# Keep only the final XCFramework
+!Frameworks/xcframework/
+
+# macOS
+.DS_Store
+
+# Test files (if large)
+Tests/**/Resources/*.mkv

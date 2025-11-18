@@ -20,14 +20,9 @@
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 
-static inline int get_averror_eof(void) {
-    return AVERROR_EOF;
-}
-
-static const int64_t AV_NOPTS_VALUE_INT = AV_NOPTS_VALUE;
-
-static inline int averror_from_errno(int err) {
-    return AVERROR(err);
-}
+// Helper function declarations
+int get_averror_eof(void);
+int averror_from_errno(int err);
+extern const int64_t AV_NOPTS_VALUE_INT;
 
 #endif // !CFFmpeg_h

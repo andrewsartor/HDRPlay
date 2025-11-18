@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "hdrplay",
+    name: "HDRPlay",
     platforms: [
         .iOS(.v14),
         .tvOS(.v14),
@@ -13,8 +13,8 @@ let package = Package(
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
-            name: "hdrplay",
-            targets: ["hdrplay"]
+            name: "HDRPlay",
+            targets: ["HDRPlay"]
         ),
     ],
     targets: [
@@ -26,16 +26,20 @@ let package = Package(
         .target(
                     name: "CFFmpeg",
                     dependencies: ["libavformat", "libavcodec", "libavutil", "libswresample", "libswscale"],
-                    path: "Sources/CFFmpeg"
+                    path: "Sources/CFFmpeg",
+                    publicHeadersPath: "include",
+                    cSettings: [
+                        .headerSearchPath("include")
+                    ]
                 ),
         .target(
-            name: "hdrplay",
+            name: "HDRPlay",
             dependencies: ["CFFmpeg"],
             path: "Sources/hdrplay"
         ),
         .testTarget(
             name: "hdrplayTests",
-            dependencies: ["hdrplay"]
+            dependencies: ["HDRPlay"]
         ),
     ]
 )

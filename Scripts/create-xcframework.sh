@@ -1,53 +1,236 @@
 #!/bin/bash
 set -e
 
+# Configuration
 FRAMEWORKS_DIR="$(pwd)/Frameworks"
 OUTPUT_DIR="${FRAMEWORKS_DIR}/xcframework"
 
+# Clean up previous builds
+rm -rf "${OUTPUT_DIR}"/*xcframework
+
 mkdir -p "${OUTPUT_DIR}"
 
-# Libraries to process
+echo "🚀 Creating individual FFmpeg XCFrameworks..."
+
+# FFmpeg libraries to create individual XCFrameworks for
 LIBS=("libavformat" "libavcodec" "libavutil" "libswresample" "libswscale")
 
-for LIB in "${LIBS[@]}"; do
-    echo "Creating XCFramework for ${LIB}..."
+# Detect library type (static .a or dynamic .dylib)
+detect_lib_type() {
+    local platform_dir=$1
+    if [[ -f "${platform_dir}/lib/libavutil.a" ]]; then
+        echo "a"
+    elif [[ -f "${platform_dir}/lib/libavutil.dylib" ]]; then
+        echo "dylib"
+    else
+        echo "❌ Error: No libavutil found in ${platform_dir}/lib/"
+        exit 1
+    fi
+}
+
+# Function to extract library-specific headers
+extract_library_headers() {
+    local platform_path=$1
+    local lib_name=$2
+    local temp_headers_dir="${platform_path}/include_${lib_name}"
     
-    # Create fat binary for iOS Simulator (arm64 + x86_64)
-    mkdir -p "${FRAMEWORKS_DIR}/ios-simulator-universal/lib"
-    lipo -create \
-        "${FRAMEWORKS_DIR}/ios-simulator-arm64/lib/${LIB}.dylib" \
-        "${FRAMEWORKS_DIR}/ios-simulator-x86_64/lib/${LIB}.dylib" \
-        -output "${FRAMEWORKS_DIR}/ios-simulator-universal/lib/${LIB}.dylib"
+    # Remove temp directory if it exists
+    rm -rf "${temp_headers_dir}"
+    mkdir -p "${temp_headers_dir}"
     
-    # Create fat binary for tvOS Simulator (arm64 + x86_64)
-    mkdir -p "${FRAMEWORKS_DIR}/tvos-simulator-universal/lib"
-    lipo -create \
-        "${FRAMEWORKS_DIR}/tvos-simulator-arm64/lib/${LIB}.dylib" \
-        "${FRAMEWORKS_DIR}/tvos-simulator-x86_64/lib/${LIB}.dylib" \
-        -output "${FRAMEWORKS_DIR}/tvos-simulator-universal/lib/${LIB}.dylib"
+    # Extract the library-specific subdirectory name (e.g., "libavcodec" -> "libavcodec")
+    local header_subdir="${lib_name}"
     
-    # Create fat binary for macOS (arm64 + x86_64)
-    mkdir -p "${FRAMEWORKS_DIR}/macos-universal/lib"
-    lipo -create \
-        "${FRAMEWORKS_DIR}/macos-arm64/lib/${LIB}.dylib" \
-        "${FRAMEWORKS_DIR}/macos-x86_64/lib/${LIB}.dylib" \
-        -output "${FRAMEWORKS_DIR}/macos-universal/lib/${LIB}.dylib"
+    # Copy only the specific library's headers
+    if [[ -d "${platform_path}/include/${header_subdir}" ]]; then
+        cp -R "${platform_path}/include/${header_subdir}" "${temp_headers_dir}/"
+        echo "${temp_headers_dir}"
+        return 0
+    else
+        echo "  ⚠️  Warning: No headers found at ${platform_path}/include/${header_subdir}"
+        return 1
+    fi
+}
+
+# Function to create XCFramework for a single library
+create_library_xcframework() {
+    local lib_name=$1
+    local lib_type=$2
     
-    # Create XCFramework
-    xcodebuild -create-xcframework \
-        -library "${FRAMEWORKS_DIR}/ios-arm64/lib/${LIB}.dylib" \
-        -headers "${FRAMEWORKS_DIR}/ios-arm64/include" \
-        -library "${FRAMEWORKS_DIR}/ios-simulator-universal/lib/${LIB}.dylib" \
-        -headers "${FRAMEWORKS_DIR}/ios-simulator-arm64/include" \
-        -library "${FRAMEWORKS_DIR}/tvos-arm64/lib/${LIB}.dylib" \
-        -headers "${FRAMEWORKS_DIR}/tvos-arm64/include" \
-        -library "${FRAMEWORKS_DIR}/tvos-simulator-universal/lib/${LIB}.dylib" \
-        -headers "${FRAMEWORKS_DIR}/tvos-simulator-arm64/include" \
-        -library "${FRAMEWORKS_DIR}/macos-universal/lib/${LIB}.dylib" \
-        -headers "${FRAMEWORKS_DIR}/macos-arm64/include" \
-        -output "${OUTPUT_DIR}/${LIB}.xcframework"
+    echo "📦 Creating XCFramework for ${lib_name}..."
     
-    echo "✅ Created ${LIB}.xcframework"
+    local xcframework_args=()
+    local platforms_found=0
+    
+    # Check all possible platform combinations
+    local platform_configs=(
+        "ios-arm64:${FRAMEWORKS_DIR}/ios-arm64"
+        "ios-simulator:${FRAMEWORKS_DIR}/ios-simulator"
+        "tvos-arm64:${FRAMEWORKS_DIR}/tvos-arm64" 
+        "tvos-simulator:${FRAMEWORKS_DIR}/tvos-simulator"
+        "macos:${FRAMEWORKS_DIR}/macos"
+    )
+    
+    # First, create universal binaries for simulators if needed
+    if [[ -d "${FRAMEWORKS_DIR}/ios-simulator-arm64" ]] && [[ -d "${FRAMEWORKS_DIR}/ios-simulator-x86_64" ]]; then
+        mkdir -p "${FRAMEWORKS_DIR}/ios-simulator/lib"
+        local lib1="${FRAMEWORKS_DIR}/ios-simulator-arm64/lib/${lib_name}.${lib_type}"
+        local lib2="${FRAMEWORKS_DIR}/ios-simulator-x86_64/lib/${lib_name}.${lib_type}"
+        local output="${FRAMEWORKS_DIR}/ios-simulator/lib/${lib_name}.${lib_type}"
+        
+        if [[ -f "${lib1}" ]] && [[ -f "${lib2}" ]]; then
+            if ! lipo -create "${lib1}" "${lib2}" -output "${output}"; then
+                echo "  ⚠️  Failed to create iOS simulator universal binary, using arm64 only"
+                cp "${lib1}" "${output}" 2>/dev/null || true
+            fi
+        elif [[ -f "${lib1}" ]]; then
+            cp "${lib1}" "${output}"
+        elif [[ -f "${lib2}" ]]; then
+            cp "${lib2}" "${output}"
+        fi
+        
+        # Copy headers if not already present
+        if [[ ! -d "${FRAMEWORKS_DIR}/ios-simulator/include" ]] && [[ -d "${FRAMEWORKS_DIR}/ios-simulator-arm64/include" ]]; then
+            cp -R "${FRAMEWORKS_DIR}/ios-simulator-arm64/include" "${FRAMEWORKS_DIR}/ios-simulator/"
+        fi
+    fi
+    
+    # Do the same for tvOS simulator
+    if [[ -d "${FRAMEWORKS_DIR}/tvos-simulator-arm64" ]] && [[ -d "${FRAMEWORKS_DIR}/tvos-simulator-x86_64" ]]; then
+        mkdir -p "${FRAMEWORKS_DIR}/tvos-simulator/lib"
+        local lib1="${FRAMEWORKS_DIR}/tvos-simulator-arm64/lib/${lib_name}.${lib_type}"
+        local lib2="${FRAMEWORKS_DIR}/tvos-simulator-x86_64/lib/${lib_name}.${lib_type}"
+        local output="${FRAMEWORKS_DIR}/tvos-simulator/lib/${lib_name}.${lib_type}"
+        
+        if [[ -f "${lib1}" ]] && [[ -f "${lib2}" ]]; then
+            if ! lipo -create "${lib1}" "${lib2}" -output "${output}"; then
+                echo "  ⚠️  Failed to create tvOS simulator universal binary, using arm64 only"
+                cp "${lib1}" "${output}" 2>/dev/null || true
+            fi
+        elif [[ -f "${lib1}" ]]; then
+            cp "${lib1}" "${output}"
+        elif [[ -f "${lib2}" ]]; then
+            cp "${lib2}" "${output}"
+        fi
+        
+        if [[ ! -d "${FRAMEWORKS_DIR}/tvos-simulator/include" ]] && [[ -d "${FRAMEWORKS_DIR}/tvos-simulator-arm64/include" ]]; then
+            cp -R "${FRAMEWORKS_DIR}/tvos-simulator-arm64/include" "${FRAMEWORKS_DIR}/tvos-simulator/"
+        fi
+    fi
+    
+    # Do the same for macOS
+    if [[ -d "${FRAMEWORKS_DIR}/macos-arm64" ]] && [[ -d "${FRAMEWORKS_DIR}/macos-x86_64" ]]; then
+        mkdir -p "${FRAMEWORKS_DIR}/macos/lib"
+        local lib1="${FRAMEWORKS_DIR}/macos-arm64/lib/${lib_name}.${lib_type}"
+        local lib2="${FRAMEWORKS_DIR}/macos-x86_64/lib/${lib_name}.${lib_type}"
+        local output="${FRAMEWORKS_DIR}/macos/lib/${lib_name}.${lib_type}"
+        
+        if [[ -f "${lib1}" ]] && [[ -f "${lib2}" ]]; then
+            if ! lipo -create "${lib1}" "${lib2}" -output "${output}"; then
+                echo "  ⚠️  Failed to create macOS universal binary, using arm64 only"
+                cp "${lib1}" "${output}" 2>/dev/null || true
+            fi
+        elif [[ -f "${lib1}" ]]; then
+            cp "${lib1}" "${output}"
+        elif [[ -f "${lib2}" ]]; then
+            cp "${lib2}" "${output}"
+        fi
+        
+        if [[ ! -d "${FRAMEWORKS_DIR}/macos/include" ]] && [[ -d "${FRAMEWORKS_DIR}/macos-arm64/include" ]]; then
+            cp -R "${FRAMEWORKS_DIR}/macos-arm64/include" "${FRAMEWORKS_DIR}/macos/"
+        fi
+    fi
+    
+    # Now build XCFramework arguments for each platform
+    for config in "${platform_configs[@]}"; do
+        local platform_name="${config%%:*}"
+        local platform_path="${config##*:}"
+        
+        local lib_file="${platform_path}/lib/${lib_name}.${lib_type}"
+        
+        if [[ -f "${lib_file}" ]]; then
+            # Extract library-specific headers
+            local headers_path=$(extract_library_headers "${platform_path}" "${lib_name}")
+            
+            if [[ -n "${headers_path}" ]] && [[ -d "${headers_path}" ]]; then
+                # Check if library has substantial content
+                local lib_size=$(stat -f%z "${lib_file}" 2>/dev/null || stat -c%s "${lib_file}" 2>/dev/null || echo "0")
+                if [[ "${lib_size}" -gt "100" ]]; then
+                    xcframework_args+=("-library" "${lib_file}")
+                    xcframework_args+=("-headers" "${headers_path}")
+                    platforms_found=$((platforms_found + 1))
+                    echo "  ✅ Added ${platform_name} (${lib_size} bytes)"
+                else
+                    echo "  ⚠️  Skipping ${platform_name} - library too small (${lib_size} bytes)"
+                fi
+            else
+                echo "  ⚠️  Skipping ${platform_name} - headers extraction failed"
+            fi
+        else
+            echo "  ⚠️  Skipping ${platform_name} - library missing"
+        fi
+    done
+    
+    if [[ ${platforms_found} -eq 0 ]]; then
+        echo "  ❌ No valid platforms found for ${lib_name}"
+        return 1
+    fi
+    
+    # Create the XCFramework
+    local output_xcframework="${OUTPUT_DIR}/${lib_name}.xcframework"
+    if xcodebuild -create-xcframework "${xcframework_args[@]}" -output "${output_xcframework}"; then
+        echo "  ✅ Created ${lib_name}.xcframework with ${platforms_found} platform(s)"
+        
+        # Clean up temporary header directories
+        for config in "${platform_configs[@]}"; do
+            local platform_path="${config##*:}"
+            rm -rf "${platform_path}/include_${lib_name}"
+        done
+        
+        return 0
+    else
+        echo "  ❌ Failed to create ${lib_name}.xcframework"
+        return 1
+    fi
+}
+
+# Detect library type from the first available platform
+LIB_TYPE=""
+for platform_dir in "${FRAMEWORKS_DIR}"/*/; do
+    if [[ -d "$platform_dir" ]] && [[ "$(basename "$platform_dir")" != "xcframework" ]] && [[ "$(basename "$platform_dir")" != "temp" ]]; then
+        LIB_TYPE=$(detect_lib_type "$platform_dir")
+        break
+    fi
 done
 
-echo "✅ All XCFrameworks created in ${OUTPUT_DIR}"
+if [[ -z "${LIB_TYPE}" ]]; then
+    echo "❌ Error: No platform directories found"
+    exit 1
+fi
+
+echo "📋 Detected library type: ${LIB_TYPE}"
+
+# Create XCFramework for each library
+CREATED_FRAMEWORKS=0
+for lib in "${LIBS[@]}"; do
+    if create_library_xcframework "${lib}" "${LIB_TYPE}"; then
+        CREATED_FRAMEWORKS=$((CREATED_FRAMEWORKS + 1))
+    fi
+    echo ""
+done
+
+if [[ ${CREATED_FRAMEWORKS} -eq 0 ]]; then
+    echo "❌ Error: No XCFrameworks were created successfully"
+    exit 1
+fi
+
+echo "🎉 Build complete!"
+echo "✅ Created ${CREATED_FRAMEWORKS} XCFramework(s) in ${OUTPUT_DIR}/"
+echo ""
+echo "📝 Next steps:"
+echo "1. Update your Package.swift to use individual binary targets:"
+echo "   .binaryTarget(name: \"libavformat\", path: \"Frameworks/xcframework/libavformat.xcframework\")"
+echo "   .binaryTarget(name: \"libavcodec\", path: \"Frameworks/xcframework/libavcodec.xcframework\")"
+echo "   ... etc for each library"
+echo ""
+echo "2. Your CFFmpeg target dependencies should list all the individual libraries"

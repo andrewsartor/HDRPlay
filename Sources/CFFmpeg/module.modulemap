@@ -1,4 +1,8 @@
 module CFFmpeg {
-    header "shim.h"
+    header "CFFmpeg.h"
     export *
+    
+    module * {
+        export *
+    }
 }
