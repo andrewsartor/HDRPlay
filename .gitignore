@@ -27,6 +27,10 @@ Frameworks/ios-simulator-*/
 Frameworks/tvos-*/
 Frameworks/macos-*/
 Frameworks/temp/
+Frameworks/ios/
+Frameworks/macos
+Frameworks/ios-simulator
+
 
 # Keep only the final XCFramework
 !Frameworks/xcframework/
