@@ -153,8 +153,8 @@ create_library_xcframework() {
             local headers_path=$(extract_library_headers "${platform_path}" "${lib_name}")
             
             if [[ -n "${headers_path}" ]] && [[ -d "${headers_path}" ]]; then
-                # Check if library has substantial content
-                local lib_size=$(stat -f%z "${lib_file}" 2>/dev/null || stat -c%s "${lib_file}" 2>/dev/null || echo "0")
+                # Check if library has substantial content (follow symlinks with -L)
+                local lib_size=$(stat -L -f%z "${lib_file}" 2>/dev/null || stat -L -c%s "${lib_file}" 2>/dev/null || echo "0")
                 if [[ "${lib_size}" -gt "100" ]]; then
                     xcframework_args+=("-library" "${lib_file}")
                     xcframework_args+=("-headers" "${headers_path}")
