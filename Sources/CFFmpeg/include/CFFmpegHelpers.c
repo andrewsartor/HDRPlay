@@ -20,3 +20,12 @@ int get_averror_eagain(void) {
 }
 
 const int64_t AV_NOPTS_VALUE_INT = AV_NOPTS_VALUE;
+
+const AVPacketSideData* get_codec_side_data(const AVCodecParameters *codecpar, enum AVPacketSideDataType type) {
+    for (int i = 0; i < codecpar->nb_coded_side_data; i++) {
+        if (codecpar->coded_side_data[i].type == type) {
+            return &codecpar->coded_side_data[i];
+        }
+    }
+    return NULL;
+}

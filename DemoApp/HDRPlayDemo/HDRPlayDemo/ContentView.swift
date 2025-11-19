@@ -274,7 +274,7 @@ class VideoTestViewModel: ObservableObject {
                         filename: url.lastPathComponent,
                         resolution: "\(videoInfo.width)×\(videoInfo.height)",
                         duration: formatDuration(demuxer.duration),
-                        codec: "HEVC", // You could add codec name to VideoInfo
+                        codec: videoInfo.codecName,
                         hdrType: hdrType,
                         colorInfo: colorInfo
                     )

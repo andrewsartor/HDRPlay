@@ -2,22 +2,28 @@
 //  VideoPlayerView.swift
 //  HDRPlayDemo
 //
-//  Phase 2.1 - AVSampleBufferDisplayLayer Integration
+//  Hardware-accelerated video player using VideoToolbox + AVSampleBufferDisplayLayer
 //
 
 import SwiftUI
-import AVFoundation
+@preconcurrency import AVFoundation
 internal import Combine
 import HDRPlay
 internal import CFFmpeg
 
-/// A SwiftUI view that plays video using AVSampleBufferDisplayLayer
+/// A SwiftUI view that plays video using hardware-accelerated decoding
 ///
 /// Architecture:
-/// 1. Wraps UIViewRepresentable (iOS/tvOS) to expose UIKit layer
-/// 2. Uses AVSampleBufferDisplayLayer for frame presentation
-/// 3. Manages timing and synchronization for smooth playback
-/// 4. Connects HDRPlay (CVPixelBuffers) to AVFoundation (CMSampleBuffers)
+/// 1. MKVDemuxer: Extracts compressed video packets from MKV container
+/// 2. VideoToolboxDecoder: Hardware-accelerated HEVC decoding to CVPixelBuffers
+/// 3. AVSampleBufferDisplayLayer: Presents frames with precise timing
+/// 4. CMTimebase: Synchronizes playback rate and current time
+///
+/// This implementation provides:
+/// - Hardware-accelerated video decoding (10-100x faster than software)
+/// - Full HDR support (HDR10, HLG with BT.2020 color gamut)
+/// - Low power consumption and excellent battery life
+/// - Smooth 4K HDR playback
 struct VideoPlayerView: View {
     let url: URL
     @StateObject private var player = VideoPlayerController()
@@ -162,7 +168,7 @@ class VideoPlayerController: ObservableObject {
 
     /// HDRPlay components
     private var demuxer: MKVDemuxer?
-    private var decoder: VideoDecoder?
+    private var decoder: VideoToolboxDecoder?
 
     /// Playback timing
     private var displayLink: CADisplayLink?
@@ -233,8 +239,8 @@ class VideoPlayerController: ObservableObject {
                     self.duration = durationSeconds
                 }
 
-                // Initialize decoder
-                let decoder = try VideoDecoder(videoInfo: videoInfo, timebase: timebase)
+                // Initialize decoder with hardware acceleration
+                let decoder = try VideoToolboxDecoder(videoInfo: videoInfo, timebase: timebase)
                 self.decoder = decoder
 
                 // Configure display layer with timebase
@@ -246,6 +252,7 @@ class VideoPlayerController: ObservableObject {
                 print("✅ Video loaded: \(videoInfo.width)x\(videoInfo.height)")
                 print("   HDR10: \(videoInfo.isHDR10), HLG: \(videoInfo.isHLG)")
                 print("   Duration: \(String(format: "%.2f", duration))s")
+                print("   Decoder: VideoToolbox (Hardware Accelerated)")
 
             } catch {
                 print("❌ Failed to load video: \(error)")
@@ -367,15 +374,18 @@ class VideoPlayerController: ObservableObject {
 
                     // Convert and enqueue each frame
                     for frame in frames {
-                        // Create sample buffer
+                        // Create sample buffer (off main thread)
                         let sampleBuffer = try await self.createSampleBuffer(
                             from: frame,
                             timebase: timebase
                         )
 
                         // Enqueue on main actor (AVFoundation requires main thread)
+                        // CMSampleBuffer is a ref-counted CF type that's safe to transfer between actors
+                        // Use nonisolated(unsafe) to bypass Sendable checking for Core Foundation type
+                        nonisolated(unsafe) let buffer = sampleBuffer
                         await MainActor.run {
-                            renderer.enqueue(sampleBuffer)
+                            renderer.enqueue(buffer)
                         }
 
                         // Increment counter

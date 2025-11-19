@@ -28,9 +28,11 @@ public class VideoDecoder {
     private var codecContext: UnsafeMutablePointer<AVCodecContext>?
     private var frame: UnsafeMutablePointer<AVFrame>?
     private var timebase: AVRational
+    private var videoInfo: VideoInfo
 
     public init(videoInfo: VideoInfo, timebase: AVRational) throws {
         self.timebase = timebase
+        self.videoInfo = videoInfo
 
         guard let codec = avcodec_find_decoder(videoInfo.codecID) else {
             throw DecoderError.codecNotFound
@@ -134,9 +136,22 @@ public class VideoDecoder {
         let width = Int(frame.pointee.width)
         let height = Int(frame.pointee.height)
 
-        var pixelBuffer: CVPixelBuffer?
-        let pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+        // Determine pixel format based on bit depth
+        let pixelFormat: OSType
+        let is10Bit = frame.pointee.format == AV_PIX_FMT_YUV420P10LE.rawValue ||
+                      frame.pointee.format == AV_PIX_FMT_YUV420P10BE.rawValue
 
+        if is10Bit {
+            // HDR content - use 10-bit format
+            pixelFormat = kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+            print("🎨 Using 10-bit pixel format for HDR")
+        } else {
+            // SDR content - use 8-bit format
+            pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+            print("🎨 Using 8-bit pixel format for SDR")
+        }
+
+        var pixelBuffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(
             kCFAllocatorDefault, width, height, pixelFormat,
             [kCVPixelBufferIOSurfacePropertiesKey: [:], kCVPixelBufferMetalCompatibilityKey: true]
@@ -146,9 +161,16 @@ public class VideoDecoder {
             return nil
         }
 
+        // Check for frame-level mastering display metadata (common in MKV files)
+        checkFrameSideData(frame: frame)
+
+        // Attach HDR color space information
+        attachColorSpaceInfo(to: buffer)
+
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
 
+        // Copy Y plane
         guard let yPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 0) else {
             return nil
         }
@@ -157,13 +179,15 @@ public class VideoDecoder {
             return nil
         }
         let yLineSize = Int(frame.pointee.linesize.0)
+        let bytesPerPixel = is10Bit ? 2 : 1
 
         for row in 0..<height {
             let srcPtr = yData.advanced(by: row * yLineSize)
             let dstPtr = yPlane.advanced(by: row * yStride)
-            memcpy(dstPtr, srcPtr, width)
+            memcpy(dstPtr, srcPtr, width * bytesPerPixel)
         }
 
+        // Copy UV plane (interleaved)
         guard let uvPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 1) else {
             return nil
         }
@@ -175,18 +199,182 @@ public class VideoDecoder {
         }
         let uvLineSize = Int(frame.pointee.linesize.1)
 
-        for row in 0..<(height / 2) {
-            let dstPtr = uvPlane.advanced(by: row * uvStride).assumingMemoryBound(to: UInt8.self)
-            let uPtr = uData.advanced(by: row * uvLineSize)
-            let vPtr = vData.advanced(by: row * uvLineSize)
+        if is10Bit {
+            // 10-bit: interleave U and V (UInt16 values)
+            for row in 0..<(height / 2) {
+                let dstPtr = uvPlane.advanced(by: row * uvStride).assumingMemoryBound(to: UInt16.self)
 
-            for col in 0..<(width / 2) {
-                dstPtr[col * 2] = uPtr[col]
-                dstPtr[col * 2 + 1] = vPtr[col]
+                // Reinterpret UInt8 pointers as UInt16 for 10-bit data
+                let uSrcPtr = uData.advanced(by: row * uvLineSize)
+                let vSrcPtr = vData.advanced(by: row * uvLineSize)
+
+                uSrcPtr.withMemoryRebound(to: UInt16.self, capacity: width / 2) { uPtr in
+                    vSrcPtr.withMemoryRebound(to: UInt16.self, capacity: width / 2) { vPtr in
+                        for col in 0..<(width / 2) {
+                            dstPtr[col * 2] = uPtr[col]
+                            dstPtr[col * 2 + 1] = vPtr[col]
+                        }
+                    }
+                }
+            }
+        } else {
+            // 8-bit: interleave U and V (UInt8 values)
+            for row in 0..<(height / 2) {
+                let dstPtr = uvPlane.advanced(by: row * uvStride).assumingMemoryBound(to: UInt8.self)
+                let uPtr = uData.advanced(by: row * uvLineSize)
+                let vPtr = vData.advanced(by: row * uvLineSize)
+
+                for col in 0..<(width / 2) {
+                    dstPtr[col * 2] = uPtr[col]
+                    dstPtr[col * 2 + 1] = vPtr[col]
+                }
             }
         }
 
         return buffer
+    }
+
+    private var hasLoggedFrameMetadata = false
+
+    private func checkFrameSideData(frame: UnsafeMutablePointer<AVFrame>) {
+        // Only log once to avoid spam
+        guard !hasLoggedFrameMetadata else { return }
+
+        let sideDataPtr = av_frame_get_side_data(frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA)
+        if let sideData = sideDataPtr {
+            hasLoggedFrameMetadata = true
+
+            let metadata = sideData.pointee.data.withMemoryRebound(
+                to: AVMasteringDisplayMetadata.self,
+                capacity: 1
+            ) { ptr in
+                return ptr.pointee
+            }
+
+            if metadata.has_primaries != 0 || metadata.has_luminance != 0 {
+                // Use Int64 for intermediate calculations to avoid overflow
+                let maxLum = UInt32(Int64(metadata.max_luminance.num) * 10000 / Int64(metadata.max_luminance.den))
+                let minLum = UInt32(Int64(metadata.min_luminance.num) * 10000 / Int64(metadata.min_luminance.den))
+
+                print("📊 Found SMPTE ST 2086 metadata in frame side data:")
+                print("   Max Luminance: \(maxLum / 10000) cd/m²")
+                print("   Min Luminance: \(minLum) / 10000 cd/m²")
+
+                // Store in videoInfo for future frames
+                let rx = UInt16(Int64(metadata.display_primaries.0.0.num) * 50000 / Int64(metadata.display_primaries.0.0.den))
+                let ry = UInt16(Int64(metadata.display_primaries.0.1.num) * 50000 / Int64(metadata.display_primaries.0.1.den))
+                let gx = UInt16(Int64(metadata.display_primaries.1.0.num) * 50000 / Int64(metadata.display_primaries.1.0.den))
+                let gy = UInt16(Int64(metadata.display_primaries.1.1.num) * 50000 / Int64(metadata.display_primaries.1.1.den))
+                let bx = UInt16(Int64(metadata.display_primaries.2.0.num) * 50000 / Int64(metadata.display_primaries.2.0.den))
+                let by = UInt16(Int64(metadata.display_primaries.2.1.num) * 50000 / Int64(metadata.display_primaries.2.1.den))
+                let wx = UInt16(Int64(metadata.white_point.0.num) * 50000 / Int64(metadata.white_point.0.den))
+                let wy = UInt16(Int64(metadata.white_point.1.num) * 50000 / Int64(metadata.white_point.1.den))
+
+                // Update videoInfo with frame metadata
+                let frameMasteringMetadata = MasteringDisplayMetadata(
+                    displayPrimariesX: [rx, gx, bx],
+                    displayPrimariesY: [ry, gy, by],
+                    whitePointX: wx,
+                    whitePointY: wy,
+                    maxLuminance: maxLum,
+                    minLuminance: minLum
+                )
+
+                // Create updated VideoInfo with the mastering metadata
+                var updatedInfo = videoInfo
+                updatedInfo = VideoInfo(
+                    width: updatedInfo.width,
+                    height: updatedInfo.height,
+                    codecID: updatedInfo.codecID,
+                    colorTransfer: updatedInfo.colorTransfer,
+                    colorPrimaries: updatedInfo.colorPrimaries,
+                    extradata: updatedInfo.extradata,
+                    pixelFormat: updatedInfo.pixelFormat,
+                    masteringDisplayMetadata: frameMasteringMetadata
+                )
+                videoInfo = updatedInfo
+            }
+        }
+    }
+
+    private func attachColorSpaceInfo(to pixelBuffer: CVPixelBuffer) {
+        // Attach color primaries
+        let colorPrimaries: CFString
+        switch videoInfo.colorPrimaries {
+        case AVCOL_PRI_BT2020:
+            colorPrimaries = kCVImageBufferColorPrimaries_ITU_R_2020 as CFString
+        case AVCOL_PRI_BT709:
+            colorPrimaries = kCVImageBufferColorPrimaries_ITU_R_709_2 as CFString
+        default:
+            colorPrimaries = kCVImageBufferColorPrimaries_ITU_R_709_2 as CFString
+        }
+        CVBufferSetAttachment(pixelBuffer, kCVImageBufferColorPrimariesKey, colorPrimaries, .shouldPropagate)
+
+        // Attach transfer function
+        let transferFunction: CFString
+        switch videoInfo.colorTransfer {
+        case AVCOL_TRC_SMPTE2084:  // HDR10 (PQ)
+            transferFunction = kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ as CFString
+        case AVCOL_TRC_ARIB_STD_B67:  // HLG
+            transferFunction = kCVImageBufferTransferFunction_ITU_R_2100_HLG as CFString
+        case AVCOL_TRC_BT709:
+            transferFunction = kCVImageBufferTransferFunction_ITU_R_709_2 as CFString
+        default:
+            transferFunction = kCVImageBufferTransferFunction_ITU_R_709_2 as CFString
+        }
+        CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, transferFunction, .shouldPropagate)
+
+        // Attach YCbCr matrix
+        let yCbCrMatrix: CFString
+        switch videoInfo.colorPrimaries {
+        case AVCOL_PRI_BT2020:
+            yCbCrMatrix = kCVImageBufferYCbCrMatrix_ITU_R_2020 as CFString
+        case AVCOL_PRI_BT709:
+            yCbCrMatrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2 as CFString
+        default:
+            yCbCrMatrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2 as CFString
+        }
+        CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, yCbCrMatrix, .shouldPropagate)
+
+        // Attach SMPTE ST 2086 mastering display metadata if available
+        if let masteringMetadata = videoInfo.masteringDisplayMetadata {
+            attachMasteringDisplayMetadata(masteringMetadata, to: pixelBuffer)
+        }
+
+        // Debug logging
+        if videoInfo.isHDR10 {
+            print("🎨 Attached HDR10 color space: BT.2020 + PQ")
+        } else if videoInfo.isHLG {
+            print("🎨 Attached HLG color space: BT.2020 + HLG")
+        } else {
+            print("🎨 Attached SDR color space: BT.709")
+        }
+    }
+
+    private func attachMasteringDisplayMetadata(_ metadata: MasteringDisplayMetadata, to pixelBuffer: CVPixelBuffer) {
+        // Create CFData with mastering display color volume
+        // Format: array of 10 CFNumbers representing chromaticity coordinates and luminance
+        let dict: [CFString: Any] = [
+            "RedX" as CFString: metadata.displayPrimariesX[0],
+            "RedY" as CFString: metadata.displayPrimariesY[0],
+            "GreenX" as CFString: metadata.displayPrimariesX[1],
+            "GreenY" as CFString: metadata.displayPrimariesY[1],
+            "BlueX" as CFString: metadata.displayPrimariesX[2],
+            "BlueY" as CFString: metadata.displayPrimariesY[2],
+            "WhitePointX" as CFString: metadata.whitePointX,
+            "WhitePointY" as CFString: metadata.whitePointY,
+            "MaxLuminance" as CFString: metadata.maxLuminance,
+            "MinLuminance" as CFString: metadata.minLuminance
+        ]
+
+        CVBufferSetAttachment(
+            pixelBuffer,
+            kCVImageBufferMasteringDisplayColorVolumeKey,
+            dict as CFDictionary,
+            .shouldPropagate
+        )
+
+        print("📊 Attached SMPTE ST 2086 metadata to pixel buffer")
     }
 
     public func flush() throws -> [DecodedFrame] {

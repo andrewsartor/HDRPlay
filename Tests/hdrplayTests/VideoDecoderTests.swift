@@ -288,7 +288,8 @@ final class VideoDecoderTests: XCTestCase {
             colorTransfer: AVCOL_TRC_UNSPECIFIED,
             colorPrimaries: AVCOL_PRI_UNSPECIFIED,
             extradata: nil,
-            pixelFormat: AV_PIX_FMT_NONE
+            pixelFormat: AV_PIX_FMT_NONE,
+            masteringDisplayMetadata: nil
         )
 
         let timebase = AVRational(num: 1, den: 1000000)
@@ -296,6 +297,110 @@ final class VideoDecoderTests: XCTestCase {
         XCTAssertThrowsError(try VideoDecoder(videoInfo: invalidInfo, timebase: timebase)) { error in
             print("Expected error for invalid codec: \(error)")
         }
+    }
+
+    // MARK: - VideoToolbox Decoder Tests
+
+    func testVideoToolboxDecoderInitialization() throws {
+        guard let testURL = getTestFileURL() else {
+            throw XCTSkip("No test MKV file available")
+        }
+
+        let demuxer = try MKVDemuxer(url: testURL)
+
+        guard let videoInfo = demuxer.videoInfo,
+              let timebase = demuxer.timebase else {
+            XCTFail("VideoInfo and timebase should be available")
+            return
+        }
+
+        print("🔧 Attempting to initialize VideoToolbox decoder...")
+        let decoder = try VideoToolboxDecoder(videoInfo: videoInfo, timebase: timebase)
+        print("✅ VideoToolbox decoder initialized successfully")
+        XCTAssertNotNil(decoder)
+    }
+
+    func testVideoToolboxDecodeFirstFrame() throws {
+        guard let testURL = getTestFileURL() else {
+            throw XCTSkip("No test MKV file available")
+        }
+
+        let demuxer = try MKVDemuxer(url: testURL)
+
+        guard let videoInfo = demuxer.videoInfo,
+              let timebase = demuxer.timebase else {
+            XCTFail("VideoInfo and timebase should be available")
+            return
+        }
+
+        let decoder = try VideoToolboxDecoder(videoInfo: videoInfo, timebase: timebase)
+
+        print("🎬 Attempting to decode first frame with VideoToolbox...")
+
+        var frameDecoded = false
+        var packetCount = 0
+        let maxPackets = 50
+
+        while let packet = try demuxer.readPacket(), packetCount < maxPackets {
+            packetCount += 1
+
+            let frames = try decoder.decode(packet: packet)
+
+            if !frames.isEmpty {
+                print("✅ Decoded \(frames.count) frame(s) from packet \(packetCount)")
+
+                let frame = frames[0]
+                print("  Frame info:")
+                print("    PTS: \(frame.pts)")
+                print("    Duration: \(frame.duration)")
+                print("    Is Keyframe: \(frame.isKeyFrame)")
+
+                // Verify pixel buffer
+                let width = CVPixelBufferGetWidth(frame.pixelBuffer)
+                let height = CVPixelBufferGetHeight(frame.pixelBuffer)
+                let pixelFormat = CVPixelBufferGetPixelFormatType(frame.pixelBuffer)
+
+                print("    PixelBuffer: \(width)x\(height), format: \(pixelFormat)")
+
+                XCTAssertGreaterThan(width, 0)
+                XCTAssertGreaterThan(height, 0)
+
+                frameDecoded = true
+                break
+            }
+        }
+
+        print("Processed \(packetCount) packets")
+        XCTAssertTrue(frameDecoded, "Should decode at least one frame")
+    }
+
+    func testVideoToolboxDecodeMultipleFrames() throws {
+        guard let testURL = getTestFileURL() else {
+            throw XCTSkip("No test MKV file available")
+        }
+
+        let demuxer = try MKVDemuxer(url: testURL)
+
+        guard let videoInfo = demuxer.videoInfo,
+              let timebase = demuxer.timebase else {
+            XCTFail("VideoInfo and timebase should be available")
+            return
+        }
+
+        let decoder = try VideoToolboxDecoder(videoInfo: videoInfo, timebase: timebase)
+
+        var totalFrames = 0
+        var packetCount = 0
+        let maxPackets = 100
+
+        while let packet = try demuxer.readPacket(), packetCount < maxPackets {
+            packetCount += 1
+            let frames = try decoder.decode(packet: packet)
+            totalFrames += frames.count
+        }
+
+        print("📊 VideoToolbox decoded \(totalFrames) frames from \(packetCount) packets")
+        XCTAssertGreaterThan(totalFrames, 0, "Should decode at least one frame")
     }
 
     // MARK: - Performance Tests

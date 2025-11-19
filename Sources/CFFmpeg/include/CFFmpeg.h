@@ -26,4 +26,7 @@ int averror_from_errno(int err);
 int get_averror_eagain(void);
 extern const int64_t AV_NOPTS_VALUE_INT;
 
+// Side data helper - get from codecpar
+const AVPacketSideData* get_codec_side_data(const AVCodecParameters *codecpar, enum AVPacketSideDataType type);
+
 #endif // !CFFmpeg_h

@@ -10,12 +10,12 @@ import CFFmpeg
 import AVFoundation
 
 public class MKVDemuxer {
-    private var formatContext: UnsafeMutablePointer<CFFmpeg.AVFormatContext>?
+    private var formatContext: UnsafeMutablePointer<AVFormatContext>?
     private var videoStreamIndex: Int = -1
-    private var videoStream: UnsafeMutablePointer<CFFmpeg.AVStream>?
+    private var videoStream: UnsafeMutablePointer<AVStream>?
     
     public init(url: URL) throws {
-        var ctx: UnsafeMutablePointer<CFFmpeg.AVFormatContext>?
+        var ctx: UnsafeMutablePointer<AVFormatContext>? = avformat_alloc_context()
         
         let result = avformat_open_input(&ctx, url.path, nil, nil)
         guard result == 0 else {
@@ -62,6 +62,59 @@ public class MKVDemuxer {
             extradata = Data(bytes: extradataPtr, count: Int(codecPar.extradata_size))
         }
 
+        // Extract mastering display metadata (SMPTE ST 2086) if available
+        var masteringDisplayMetadata: MasteringDisplayMetadata?
+        let sideDataPtr = get_codec_side_data(
+            stream.pointee.codecpar,
+            AV_PKT_DATA_MASTERING_DISPLAY_METADATA
+        )
+
+        print("🔍 Checking for SMPTE ST 2086 metadata in codecpar...")
+        print("   Number of side data entries: \(stream.pointee.codecpar.pointee.nb_coded_side_data)")
+
+        if let sideData = sideDataPtr {
+            print("   ✅ Found mastering display metadata in codecpar")
+            let metadata = sideData.pointee.data.withMemoryRebound(
+                to: AVMasteringDisplayMetadata.self,
+                capacity: 1
+            ) { ptr in
+                return ptr.pointee
+            }
+
+            // Check if metadata has values (not initialized to 0)
+            if metadata.has_primaries != 0 || metadata.has_luminance != 0 {
+                // Convert rational values to proper format
+                // Use Int64 for intermediate calculations to avoid overflow
+                let rx = UInt16(Int64(metadata.display_primaries.0.0.num) * 50000 / Int64(metadata.display_primaries.0.0.den))
+                let ry = UInt16(Int64(metadata.display_primaries.0.1.num) * 50000 / Int64(metadata.display_primaries.0.1.den))
+                let gx = UInt16(Int64(metadata.display_primaries.1.0.num) * 50000 / Int64(metadata.display_primaries.1.0.den))
+                let gy = UInt16(Int64(metadata.display_primaries.1.1.num) * 50000 / Int64(metadata.display_primaries.1.1.den))
+                let bx = UInt16(Int64(metadata.display_primaries.2.0.num) * 50000 / Int64(metadata.display_primaries.2.0.den))
+                let by = UInt16(Int64(metadata.display_primaries.2.1.num) * 50000 / Int64(metadata.display_primaries.2.1.den))
+                let wx = UInt16(Int64(metadata.white_point.0.num) * 50000 / Int64(metadata.white_point.0.den))
+                let wy = UInt16(Int64(metadata.white_point.1.num) * 50000 / Int64(metadata.white_point.1.den))
+                let maxLum = UInt32(Int64(metadata.max_luminance.num) * 10000 / Int64(metadata.max_luminance.den))
+                let minLum = UInt32(Int64(metadata.min_luminance.num) * 10000 / Int64(metadata.min_luminance.den))
+
+                masteringDisplayMetadata = MasteringDisplayMetadata(
+                    displayPrimariesX: [rx, gx, bx],
+                    displayPrimariesY: [ry, gy, by],
+                    whitePointX: wx,
+                    whitePointY: wy,
+                    maxLuminance: maxLum,
+                    minLuminance: minLum
+                )
+
+                print("📊 Found SMPTE ST 2086 metadata:")
+                print("   Max Luminance: \(maxLum / 10000) cd/m²")
+                print("   Min Luminance: \(minLum) / 10000 cd/m²")
+            } else {
+                print("   ⚠️  Mastering display metadata present but has_primaries=\(metadata.has_primaries), has_luminance=\(metadata.has_luminance)")
+            }
+        } else {
+            print("   ℹ️  No SMPTE ST 2086 metadata in codecpar (may be in frame side data)")
+        }
+
         return VideoInfo(
             width: Int(codecPar.width),
             height: Int(codecPar.height),
@@ -69,7 +122,8 @@ public class MKVDemuxer {
             colorTransfer: codecPar.color_trc,
             colorPrimaries: codecPar.color_primaries,
             extradata: extradata,
-            pixelFormat: AVPixelFormat(codecPar.format)
+            pixelFormat: AVPixelFormat(codecPar.format),
+            masteringDisplayMetadata: masteringDisplayMetadata
         )
     }
 
@@ -136,6 +190,15 @@ public enum DemuxerError: Error {
     case noVideoStream
 }
 
+public struct MasteringDisplayMetadata {
+    public let displayPrimariesX: [UInt16]  // 3 values (R, G, B) in 0.00002 increments
+    public let displayPrimariesY: [UInt16]  // 3 values (R, G, B) in 0.00002 increments
+    public let whitePointX: UInt16          // in 0.00002 increments
+    public let whitePointY: UInt16          // in 0.00002 increments
+    public let maxLuminance: UInt32         // in 0.0001 cd/m² increments
+    public let minLuminance: UInt32         // in 0.0001 cd/m² increments
+}
+
 public struct VideoInfo {
     public let width: Int
     public let height: Int
@@ -144,6 +207,7 @@ public struct VideoInfo {
     public let colorPrimaries: AVColorPrimaries
     public let extradata: Data?
     public let pixelFormat: AVPixelFormat
+    public let masteringDisplayMetadata: MasteringDisplayMetadata?
 
     public var isHDR10: Bool {
         colorTransfer == AVCOL_TRC_SMPTE2084 && colorPrimaries == AVCOL_PRI_BT2020
@@ -151,6 +215,26 @@ public struct VideoInfo {
 
     public var isHLG: Bool {
         colorTransfer == AVCOL_TRC_ARIB_STD_B67
+    }
+
+    /// Human-readable codec name
+    public var codecName: String {
+        switch codecID {
+        case AV_CODEC_ID_H264:
+            return "H.264/AVC"
+        case AV_CODEC_ID_HEVC:
+            return "HEVC/H.265"
+        case AV_CODEC_ID_VP9:
+            return "VP9"
+        case AV_CODEC_ID_AV1:
+            return "AV1"
+        case AV_CODEC_ID_MPEG4:
+            return "MPEG-4"
+        case AV_CODEC_ID_VP8:
+            return "VP8"
+        default:
+            return "Codec \(codecID.rawValue)"
+        }
     }
 }
 
