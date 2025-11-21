@@ -154,6 +154,47 @@ create_library_xcframework() {
         fi
 
         if [[ -f "${lib_file}" ]]; then
+            # Fix install_name to use @rpath for dynamic libraries
+            if [[ "${lib_type}" == "dylib" ]]; then
+                # Get the full filename for the install_name (e.g., libavformat.62.3.100.dylib)
+                local lib_basename=$(basename "${lib_file}")
+                local install_name="@rpath/${lib_basename}"
+
+                # Change the install_name
+                install_name_tool -id "${install_name}" "${lib_file}" 2>/dev/null || true
+
+                # Fix dependencies on other FFmpeg libraries to use @rpath with full version names
+                for dep_lib in "${LIBS[@]}"; do
+                    # Find any dependency path (even if already using @rpath)
+                    local old_dep=$(otool -L "${lib_file}" | grep "${dep_lib}" | awk '{print $1}' | head -1)
+                    if [[ -n "${old_dep}" ]] && [[ "${old_dep}" != "${lib_file}:"* ]]; then
+                        # Find the actual dependency file in the same lib directory
+                        local dep_dir=$(dirname "${lib_file}")
+                        local dep_file=$(find "${dep_dir}" -name "${dep_lib}.*.*.*.dylib" | head -1)
+                        if [[ -n "${dep_file}" ]]; then
+                            local dep_basename=$(basename "${dep_file}")
+                            local new_dep="@rpath/${dep_basename}"
+                            # Only change if it's different
+                            if [[ "${old_dep}" != "${new_dep}" ]]; then
+                                install_name_tool -change "${old_dep}" "${new_dep}" "${lib_file}" 2>/dev/null || true
+                                echo "      Updated dependency: ${dep_lib} -> ${dep_basename}"
+                            fi
+                        fi
+                    fi
+                done
+
+                # Create symlink for major version (e.g., libavformat.62.dylib -> libavformat.62.3.100.dylib)
+                local lib_dir=$(dirname "${lib_file}")
+                local lib_basename=$(basename "${lib_file}")
+                if [[ "${lib_basename}" =~ ^(.+)\.([0-9]+)\.([0-9]+)\.([0-9]+)\.dylib$ ]]; then
+                    local base_name="${BASH_REMATCH[1]}"
+                    local major="${BASH_REMATCH[2]}"
+                    local symlink_name="${base_name}.${major}.dylib"
+                    (cd "${lib_dir}" && ln -sf "${lib_basename}" "${symlink_name}")
+                    echo "  🔗 Created symlink: ${symlink_name} -> ${lib_basename}"
+                fi
+            fi
+
             # Extract library-specific headers
             local headers_path=$(extract_library_headers "${platform_path}" "${lib_name}")
             

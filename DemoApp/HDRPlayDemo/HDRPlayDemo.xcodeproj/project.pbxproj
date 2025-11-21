@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0E6E08742ED048D800900FE3 /* libavutil.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E086F2ED048D800900FE3 /* libavutil.xcframework */; };
+		0E6E08752ED048D800900FE3 /* libavutil.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E086F2ED048D800900FE3 /* libavutil.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0E6E08762ED048D800900FE3 /* libswresample.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08702ED048D800900FE3 /* libswresample.xcframework */; };
+		0E6E08772ED048D800900FE3 /* libswresample.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08702ED048D800900FE3 /* libswresample.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0E6E08782ED048D800900FE3 /* libavcodec.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08712ED048D800900FE3 /* libavcodec.xcframework */; };
+		0E6E08792ED048D800900FE3 /* libavcodec.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08712ED048D800900FE3 /* libavcodec.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0E6E087A2ED048D800900FE3 /* libavformat.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08722ED048D800900FE3 /* libavformat.xcframework */; };
+		0E6E087B2ED048D800900FE3 /* libavformat.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08722ED048D800900FE3 /* libavformat.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0E6E087C2ED048D800900FE3 /* libswscale.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08732ED048D800900FE3 /* libswscale.xcframework */; };
+		0E6E087D2ED048D800900FE3 /* libswscale.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0E6E08732ED048D800900FE3 /* libswscale.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0E7A70DD2ECC877000371852 /* HDRPlay in Frameworks */ = {isa = PBXBuildFile; productRef = 0E7A70DC2ECC877000371852 /* HDRPlay */; };
 /* End PBXBuildFile section */
 
@@ -27,10 +37,33 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		0E6E087E2ED048D800900FE3 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				0E6E087D2ED048D800900FE3 /* libswscale.xcframework in Embed Frameworks */,
+				0E6E08772ED048D800900FE3 /* libswresample.xcframework in Embed Frameworks */,
+				0E6E087B2ED048D800900FE3 /* libavformat.xcframework in Embed Frameworks */,
+				0E6E08792ED048D800900FE3 /* libavcodec.xcframework in Embed Frameworks */,
+				0E6E08752ED048D800900FE3 /* libavutil.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0E693C912ECC6FE000D5980A /* HDRPlayDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HDRPlayDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E693CA22ECC6FE100D5980A /* HDRPlayDemoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HDRPlayDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E693CAC2ECC6FE100D5980A /* HDRPlayDemoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HDRPlayDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0E6E086F2ED048D800900FE3 /* libavutil.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavutil.xcframework; path = ../../Frameworks/xcframework/libavutil.xcframework; sourceTree = "<group>"; };
+		0E6E08702ED048D800900FE3 /* libswresample.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswresample.xcframework; path = ../../Frameworks/xcframework/libswresample.xcframework; sourceTree = "<group>"; };
+		0E6E08712ED048D800900FE3 /* libavcodec.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavcodec.xcframework; path = ../../Frameworks/xcframework/libavcodec.xcframework; sourceTree = "<group>"; };
+		0E6E08722ED048D800900FE3 /* libavformat.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavformat.xcframework; path = ../../Frameworks/xcframework/libavformat.xcframework; sourceTree = "<group>"; };
+		0E6E08732ED048D800900FE3 /* libswscale.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswscale.xcframework; path = ../../Frameworks/xcframework/libswscale.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -69,7 +102,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0E6E08742ED048D800900FE3 /* libavutil.xcframework in Frameworks */,
+				0E6E08782ED048D800900FE3 /* libavcodec.xcframework in Frameworks */,
+				0E6E08762ED048D800900FE3 /* libswresample.xcframework in Frameworks */,
 				0E7A70DD2ECC877000371852 /* HDRPlay in Frameworks */,
+				0E6E087C2ED048D800900FE3 /* libswscale.xcframework in Frameworks */,
+				0E6E087A2ED048D800900FE3 /* libavformat.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,6 +134,7 @@
 				0E693C932ECC6FE000D5980A /* HDRPlayDemo */,
 				0E693CA52ECC6FE100D5980A /* HDRPlayDemoTests */,
 				0E693CAF2ECC6FE100D5980A /* HDRPlayDemoUITests */,
+				0E6E086E2ED048D800900FE3 /* Frameworks */,
 				0E693C922ECC6FE000D5980A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -110,6 +149,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		0E6E086E2ED048D800900FE3 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0E6E08712ED048D800900FE3 /* libavcodec.xcframework */,
+				0E6E08722ED048D800900FE3 /* libavformat.xcframework */,
+				0E6E086F2ED048D800900FE3 /* libavutil.xcframework */,
+				0E6E08702ED048D800900FE3 /* libswresample.xcframework */,
+				0E6E08732ED048D800900FE3 /* libswscale.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -120,6 +171,7 @@
 				0E693C8D2ECC6FE000D5980A /* Sources */,
 				0E693C8E2ECC6FE000D5980A /* Frameworks */,
 				0E693C8F2ECC6FE000D5980A /* Resources */,
+				0E6E087E2ED048D800900FE3 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
